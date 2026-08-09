@@ -1,25 +1,22 @@
 # agentic-research-playbook
 
-**A toolkit for the "brain" of a long-horizon agent loop** — the judgment calls that decide *what* to verify, *what* to remember, and *what* "done" actually means, as opposed to the mechanics of running the loop itself.
+**A toolkit for the "brain" of a long-horizon agent loop.**
 
-Distilled from operating an agent fleet that reproduced **363 ICML papers** end-to-end (build → verify → publish → defend against re-grading) over ~3 weeks, finishing **1st of several hundred entrants** in the Hugging Face *ICML 2026 Agent Reproducibility* hackathon (+54 pts over 2nd place). See **[PLAYBOOK.md](PLAYBOOK.md)** for the full framework with incident-level detail.
+Most loop-building tools give you the skeleton: find a task, do it, check it, remember it, run again. What they don't give you is judgment: what your checker should actually be looking at, what's worth writing down, when "done" quietly stopped being true. This repo is that judgment, written down as five rules pulled out of a project that leaned on all five harder than most.
 
-This repo is the reusable distillation, not the source project — competition-specific tooling and identifiers are deliberately excluded so the lessons transfer to unrelated future work. There is no code here to install; it's a set of operating principles you apply when you design a loop.
+The project: an agent fleet that reproduced 363 ICML papers start to finish over about three weeks, finishing first out of several hundred entrants in the Hugging Face *ICML 2026 Agent Reproducibility* hackathon. [PLAYBOOK.md](PLAYBOOK.md) has the full story, incident by incident.
+
+This repo isn't the code from that project. It's what's left after stripping out everything specific to papers and hackathons, so the lessons still hold up on whatever you're looping next.
 
 ---
 
-## What problem this solves
+## Why the mechanics alone aren't enough
 
-Any framework that lets you *build* a loop (discover work → act → verify → persist state → schedule → know when to stop) will happily run a badly-designed loop just as fast as a good one. The tooling can't tell you:
+Picture a factory line that's fully automated but has nobody checking the output. It will stamp out defective parts at the exact same speed as good ones, because speed was never the thing missing. A loop behaves the same way. It doesn't know its own checker is a rubber stamp, that its memory is a pile of notes nobody could act on later, or that something it called "done" three days ago quietly stopped being true when the rules changed underneath it.
 
-- whether your verifier is actually checking the thing that matters, or a friendlier proxy for it
-- what shape your memory needs to have to actually prevent repeat mistakes, versus just accumulating logs
-- whether an artifact your loop already marked "done" is still done under the current rules
-- when to stop producing more work and start confirming the work you already have
+Those aren't bugs you patch after the fact. They're calls somebody has to make before the loop runs unattended, and getting them wrong is how a loop spends a whole weekend confidently doing the wrong thing, hundreds of times, before anyone notices.
 
-Those are judgment calls, and getting them wrong is how a loop burns a weekend confidently doing the wrong thing at scale. This playbook is that judgment, written down as five layers.
-
-## The five-layer operating model
+## The five rules
 
 ```mermaid
 flowchart TB
@@ -46,11 +43,50 @@ flowchart TB
     L5 --> OUT
 ```
 
-Each layer has its own failure mode if it's missing — see **[PLAYBOOK.md](PLAYBOOK.md)** for what actually broke and how it was caught. Short version: skip Layer 1 and the loop silently dies on a session reset; skip Layer 2 and the loop grades its own homework; skip Layer 3 and every incident gets re-diagnosed from zero; skip Layer 4 and effort goes to the visible rubric instead of the scored one; skip Layer 5 and every human correction evaporates at the next context reset.
+### Layer 1 — build a lighthouse, not a flashlight
+
+A flashlight only works while a hand is holding it. A lighthouse runs all night with nobody watching, because it was built not to need anyone. A loop that only survives inside one long chat session is a flashlight wearing a lighthouse costume: the moment that session restarts, whatever it was quietly running goes with it, and there's no crash, no error, nothing. It just stops, and a stopped loop looks exactly like a loop that finished everything and has nothing left to do.
+
+The fix isn't clever. Write down every standing job's schedule and purpose somewhere that outlives any one session, and after every restart or handoff, actually check the jobs are alive instead of assuming they still are because they were an hour ago.
+
+### Layer 2 — don't let the author grade their own essay
+
+Ask a student to grade their own essay and they'll read what they meant to write, not what's actually on the page. An agent grading its own output fails the same way, for the same reason: it already believes its own explanation for what it did.
+
+This is concrete, not theoretical. A cheap, fast, local stand-in for the real grader (which was slow, expensive, and rate-limited) once caught a second bug that a proposed fix would have missed completely. Without it, the team would have shipped an artifact that looked fixed and wasn't, and only found out days later when the real grader finally ran. One local check, done by something structurally separate from the thing being checked, was the entire difference.
+
+There's a sharper version of the same rule: once something is marked done, a small edit doesn't necessarily only change the small thing. If the grader re-scores the whole artifact on any touch, a "harmless" tweak can quietly downgrade work that was already passing. Treat every edit to graded work as a re-roll of the whole verdict, not a patch to one corner of it.
+
+### Layer 3 — write doctor's notes, not diary entries
+
+"Patient had a rash" is a diary entry. "Rash cleared, came back after switching to generic amoxicillin, probably a cross-reaction, avoid until confirmed" is a doctor's note. The first is useless to the next patient who walks in with the same symptom. The second tells them exactly what to check, because it comes with a reason attached.
+
+Two findings from the reproducibility project hold up well past papers:
+
+- **The fidelity trap.** A result built on the target's own native-scale object reads as a genuine reproduction. The same result built on a shrunk-down stand-in reads as a toy demo, even when the numbers match to five decimal places. When a real result got misjudged as a stand-in, arguing "it's morally the same" never worked. Pointing at the exact native-scale object and showing the measured number matches the target's own to high precision did.
+- **A verdict doesn't know when the rules changed.** Partway through the project, the grading rules shifted, and every artifact scored before that shift kept displaying its old score until something forced a re-check. "Done" from last week isn't guaranteed to still be done under this week's rules.
+
+Write a finding down the moment it's noticed, because the reasoning behind it goes fuzzy fast, and give every entry the same three parts: the claim, why it's true, and when it should change what happens next.
+
+### Layer 4 — study for the exam that's actually graded
+
+A reading list and the exam it's supposedly based on aren't always the same document. Sometimes the exam only covers half the list, or covers something the list never mentioned, and the student who tracked down last year's exam does better than the one who read every page.
+
+On the reproducibility project, the publicly declared list of what needed doing and the list the system actually scored against were two different documents, and sizing effort to the visible one left real points sitting on the table. The value of a unit of work also turned out to follow a formula rather than a flat number, which meant some units the leading competitor had already called "finished" were still worth more effort. The leader had undershot the real ceiling without realizing it.
+
+One more thing worth carrying into any deadline-bound loop: the bottleneck flips as the deadline gets close. Early on, the limit is how fast you can produce work. Near the end, it's the shared evaluator, backed up because everyone rushes at once, and only what's already been confirmed by the time the clock runs out counts. Chasing more volume stops being the right move well before the crunch; chasing more *confirmed* volume takes over.
+
+### Layer 5 — human course-corrections are stone, not water
+
+A spoken instruction in a chat is water. It evaporates the moment the session resets, and nobody notices until the mistake it was meant to prevent happens again. A written directive with its reasoning attached is stone. It's still there next week, and it can be checked against, argued with, and deliberately revised instead of quietly forgotten.
+
+The biggest strategic pivots on the reproducibility project came as short, plain-language directives from the human running it, mid-project, not from anything the system worked out on its own. What made them stick was writing each one down as durable state, reasoning included, in the same turn it was given. "I'll remember this" is exactly the kind of promise a context reset breaks.
+
+---
 
 ## How this fits into loop engineering
 
-"Loop engineering" here means designing a system that prompts the agent for you: it discovers work, acts, verifies the result against explicit criteria, persists state, runs on a cadence, and knows when to stop. That structure — the six mechanical parts below — is necessary but not sufficient. This playbook is what you bring to fill in the judgment inside each part, for *any* long-horizon task, not just research reproduction.
+"Loop engineering" is the practice of building a system that prompts the agent for you instead of you prompting it turn by turn: something that finds work, does it, checks it against explicit criteria, remembers what happened, runs on a schedule, and knows when to stop. That's the skeleton. The five rules above are the judgment that goes inside it, and none of them are specific to research reproduction.
 
 ```mermaid
 flowchart LR
@@ -80,21 +116,20 @@ flowchart LR
 | ⑤ Scheduling / cadence | Layer 1 — Orchestration | Does this survive a session restart, or does it silently die and look identical to "nothing to do"? |
 | ⑥ Kill conditions | Layer 5 — Human steering | Is the stop/redirect condition durable state with reasoning attached, or a comment that evaporates next session? |
 
-The takeaway: build the loop's mechanics with whatever tooling fits (a `while` script, `/loop`, `/goal`, GitHub Actions), then run every part of it through this table before trusting it at scale.
+Build the loop's mechanics with whatever tooling already fits: a `while` script, `/loop`, `/goal`, GitHub Actions. Then, before trusting it at scale, run every row of that table against your own setup. Most loops that fail at scale aren't missing a part. They have all six parts and got the judgment inside one of them wrong.
 
 ## Using this as a toolkit
 
-1. **Before scaling a loop**, read the layer whose failure mode matches your biggest risk right now — durability (Layer 1), self-grading (Layer 2), repeat mistakes (Layer 3), wrong target (Layer 4), or lost human context (Layer 5).
-2. **While running it**, apply the [starter checklist](PLAYBOOK.md#starter-checklist-for-the-next-scaled-agent-campaign) — it's the seven-item pre-flight from the case study, written to be domain-agnostic.
-3. **When something goes wrong**, check it against the [anti-patterns](PLAYBOOK.md#anti-patterns-observed) list first — most loop failures are a named pattern, not a novel bug.
-4. **As you learn new failure modes**, log them the way Layer 3 describes — claim, why, how to apply — so the next incident is a lookup, not a re-derivation.
+Start with whichever layer matches the risk that worries you most right now: a loop that dies quietly (Layer 1), a checker that's really just the worker in a trench coat (Layer 2), the same mistake happening twice (Layer 3), effort aimed at the wrong target (Layer 4), or a human correction that got lost at the last context reset (Layer 5).
 
-This repo doesn't include a loop runner, scaffolding, or scripts — pair it with whatever loop-building tooling you already use. This is the layer that tells that tooling what to check and why.
+Once it's running, the [starter checklist](PLAYBOOK.md#starter-checklist-for-the-next-scaled-agent-campaign) is the seven-item pre-flight from the case study, written to apply outside it. When something breaks, check the [anti-patterns](PLAYBOOK.md#anti-patterns-observed) list before assuming it's a new bug; most loop failures turn out to be a named pattern that already has a name here. And when a new failure mode shows up that isn't on either list, write it down the way Layer 3 describes, so the next time it happens is a lookup instead of a re-diagnosis from scratch.
+
+There's no loop runner or scaffolding in this repo, and that's on purpose. Pair it with whatever loop-building tooling you're already using; this is the part that tells that tooling what to check and why.
 
 ## Repo layout
 
 | File | Purpose |
 |---|---|
 | [`PLAYBOOK.md`](PLAYBOOK.md) | The full framework: all five layers, anti-patterns, starter checklist, case study numbers |
-| `README.md` | This file — orientation and the loop-engineering mapping |
+| `README.md` | This file, orientation and the loop-engineering mapping |
 | `AGENTS.md` | Working conventions for editing this repo (prose-only, domain-agnostic, claim-must-trace-to-incident) |
