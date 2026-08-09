@@ -126,6 +126,8 @@ Once it's running, the [starter checklist](PLAYBOOK.md#starter-checklist-for-the
 
 There's no loop runner or scaffolding in this repo, and that's on purpose. Pair it with whatever loop-building tooling you're already using; this is the part that tells that tooling what to check and why.
 
+If you want this framework as something an agent can actually load and act on rather than prose to remember, see [`ai-sherpa-loop-engineering-harness`](https://github.com/AI-Sherpa/ai-sherpa-loop-engineering-harness) — a Claude Code skill that turns these five layers into reference docs plus copyable templates (a jobs registry, an eval log, a knowledge log, a grader-model worksheet, a directives log), paired with a sibling skill for the single-loop mechanics underneath them.
+
 ## Repo layout
 
 | File | Purpose |
